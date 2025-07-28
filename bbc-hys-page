@@ -1,0 +1,17 @@
+const fs = require('fs');
+const { text } = require('stream/consumers');
+let ct = 0; let ix = 0; let fn = 0;
+comments = [];
+
+// Function to fetch BBC HYS (Have Your Say) URLs from a given subPage
+async function getAllPages(page {
+
+    const urlRes = await fetch("https://www.bbc.co.uk/" + page, {
+        "body": null,
+        "method": "GET"
+    });
+    const urlHtm = await urlRes.text();
+
+})
+
+module.exports = urlHtm;

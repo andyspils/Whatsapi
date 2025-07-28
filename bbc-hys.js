@@ -1,12 +1,15 @@
 const fs = require('fs');
 const { text } = require('stream/consumers');
+const getPage = require('./bbc-hys-page.js');
+
+
 let ct = 0; let ix = 0; let fn = 0;
-let urls = [];  let finish = [];
+let urls = []; let finish = []; comments = [];
 let pages = ["sport", "sport/football", "sport/cricket", "sport/formula1", "sport/rugby-union", "sport/tennis", "sport/athletics", "sport/golf", "sport/boxing", "news", "news/world", "news/business", "weather", "news/health", "news/science_and_environment", "news/technology", "news/entertainment_and_arts", "news/education", "news/uk_politics", "news/in_pictures", "news/video"];
 
 // Function to fetch BBC HYS (Have Your Say) URLs from a given subPage
 async function getBbcHys(subPage, fn) {
- 
+
     const res = await
         fetch("https://www.bbc.co.uk/" + subPage, {
             "body": null,
@@ -38,67 +41,52 @@ async function getBbcHys(subPage, fn) {
     // Remove duplicates & sort URLs on last step
     var allTrue = finish.filter(x => x).length
 
-
     // if all pages have been processed, remove duplicates and sort URLs
     if (allTrue === pages.length) {
         urls = [...new Set(urls)];
         urls.sort();
-        console.log("Total comment articles found: " + urls.length);
-        console.log(urls)
+
         // Write URLs to a file in JSON format, include the title of the page of each url
-        for (let i = 0; i < urls.length; i++) {         
+        for (let i = 0; i < urls.length; i++) {
             const urlRes = await fetch("https://www.bbc.co.uk/" + urls[i], {
                 "body": null,
                 "method": "GET"
             });
             const urlHtm = await urlRes.text();
 
-            const titleMatch = urlHtm.match(/<title data-rh="true">(.*?)<\/title>/);
-
-            let regex = /(\d+)\s+comments<\/span>/i;
-            var totalComments = urlHtm.match(regex);
-
+            // Extract the API key and forum ID from the URL
             regex = /comments\?apiKey=([^&]+)/;
             var apiKey = urlHtm.match(regex);
-
             regex = /forumId=([^&]+)/;
             var forumId = urlHtm.match(regex);
-            urls[i] = { url: urls[i], title: titleMatch[1], comments: totalComments[1], apiKey: apiKey[1], forumId: forumId[1] };
-        /*    if (titleMatch && titleMatch[1]) {
-                urls[i] = { url: urls[i], title: titleMatch[1] };
-            } else {
-                urls[i] = { url: urls[i], title: "No Title Found" };
-            }
 
-             if (totalComments && totalComments[1]) {
-                urls[i] = { url: urls[i], comments: totalComments[1] };
-            } else {
-                urls[i] = { url: urls[i], comments: "No Comment total Found" };
-            }
+            // fetch from comments url to get nextToken
+            const getNextToken = await fetch("https://www.bbc.co.uk/wc-data/container/comments?apiKey=" + apiKey[1] + "&env=live&forumId=" + forumId[1] + "&isFirstDataRequested=true", {
+                "body": null,
+                "method": "GET"
+            });
 
-            
-             if (apiKey && apiKey[1]) {
-                urls[i] = { url: urls[i], apiKey: apiKey[1] };
-            } else {
-                urls[i] = { url: urls[i], apiKey: "No API key Found" };
-            }
-            
-             if (forumId && forumId[1]) {
-                urls[i] = { url: urls[i], forumId: forumId[1] };
-            } else {
-                urls[i] = { url: urls[i], forumId: "No Forum ID Found" };
-            }
-                */
-        } 
+            const nextTokenJson = await getNextToken.json();
+
+            urls[i] = { url: urls[i], title: nextTokenJson.title, moderation: nextTokenJson.moderation.status, totalPostsCount: nextTokenJson.totalPostsCount, totalCommentsCount: nextTokenJson.totalCommentsCount, canLoadMore: nextTokenJson.canLoadMore, isClosed: nextTokenJson.isClosed, apiKey: apiKey[1], forumId: forumId[1], nextToken: nextTokenJson.nextToken, comments: nextTokenJson.comments  };
+           
+        }
         // clear down json file 
         fs.writeFileSync("bbc-hys.json", JSON.stringify([], null, 3), 'utf8');
         // Write the URLs to a JSON file
         fs.writeFileSync("bbc-hys.json", JSON.stringify(urls, null, 3), 'utf8');
-       }
-    return true
+        console.log("Ending BBC HYS URL extraction at " + new Date().toLocaleString());
+      
+
+
+  
+}
+return true
 }
 
 // Start the process, processing each page
+
+console.log("Starting BBC HYS URL extraction at " + new Date().toLocaleString());
 for (ix = 0; ix < pages.length; ix++) {
     getBbcHys(pages[ix], ix)
 }
